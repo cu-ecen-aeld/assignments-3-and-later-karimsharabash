@@ -9,15 +9,23 @@
 */
 bool do_system(const char *cmd)
 {
-
+   int ret =0;
 /*
- * TODO  add your code here
  *  Call the system() function with the command set in the cmd
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
+    ret = system(cmd);
+    if( ret == -1)
+    {
+	    perror("System");
+	    return false;
+    }
+    else
+    {
 
-    return true;
+	     return true;
+    }
 }
 
 /**
@@ -45,9 +53,7 @@ bool do_exec(int count, ...)
         command[i] = va_arg(args, char *);
     }
     command[count] = NULL;
-    // this line is to avoid a compile warning before your implementation is complete
-    // and may be removed
-    command[count] = command[count];
+    va_end(args);
 
 /*
  * TODO:
@@ -58,10 +64,31 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    int ret = 0;
+    
 
-    va_end(args);
+    ret = fork();
+    if (ret == 0) // Child process
+    {
+	execv(command[0] , command);
 
-    return true;
+	perror("execv");
+	exit(1);
+    }
+    else if (ret > 0) // Parent Process
+    {
+	int childStatus = 0;
+
+	if (waitpid(ret, &childStatus, 0) == -1)
+    	{
+		return false;
+    	}
+	else if (WIFEXITED(childStatus) && WEXITSTATUS(childStatus) == 0)
+	{
+			return true;
+	}
+    } 
+    return false;
 }
 
 /**
@@ -82,7 +109,6 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
-    command[count] = command[count];
 
 
 /*
@@ -93,7 +119,39 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *
 */
 
-    va_end(args);
+    va_end(args); 
+    int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);
+    int ret = 0;
+    
 
-    return true;
+
+    ret = fork();
+    if (ret == 0) // Child process
+    {
+	if (dup2(fd, 1) < 0) { perror("dup2"); abort(); }
+   	close(fd);
+        execv(command[0] , command);
+
+        perror("execv");
+	exit(1);
+    }
+    else if (ret > 0) // Parent Process
+    {
+     	  int childStatus = 0;
+  	  
+	  close(fd);
+          if (waitpid(ret, &childStatus, 0) == -1)
+          {
+                  return false;
+          }
+          else if (WIFEXITED(childStatus) && WEXITSTATUS(childStatus) == 0)
+          {
+  		  return true;
+          }       
+          
+      }  
+
+
+
+    return false;
 }
