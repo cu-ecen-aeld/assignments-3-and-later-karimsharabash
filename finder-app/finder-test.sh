@@ -49,7 +49,7 @@ then
 	fi
 fi
 
-if [ ! -e "writer" ]; then
+if [ ! -e "/usr/bin/writer" ]; then
      #echo "Create the Write if not exists"
      make
 fi
