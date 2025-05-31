@@ -1,0 +1,30 @@
+#!/bin/sh
+
+DAEMON_NAME="aesdsocket"
+DAEMON_PATH="/usr/bin/$DAEMON_NAME" 
+PID_FILE="/var/run/$DAEMON_NAME.pid"
+
+case "$1" in
+    start)
+        echo "Starting $DAEMON_NAME..."
+        start-stop-daemon -S -b -n "$DAEMON_NAME" -a "$DAEMON_PATH" -- -d -p "$PID_FILE"
+        ;;
+    stop)
+        echo "Stopping $DAEMON_NAME..."
+            kill -SIGNTERM "$(cat "$PID_FILE")"
+            rm -f "$PID_FILE"
+        else
+            echo "$DAEMON_NAME not running or PID file not found."
+        fi
+        ;;
+    restart)
+        $0 stop
+        $0 start
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+        ;;
+esac
+
+exit 0
