@@ -11,6 +11,7 @@ case "$1" in
         ;;
     stop)
         echo "Stopping $DAEMON_NAME..."
+        if [ -f "$PID_FILE" ]; then
             kill -SIGNTERM "$(cat "$PID_FILE")"
             rm -f "$PID_FILE"
         else
