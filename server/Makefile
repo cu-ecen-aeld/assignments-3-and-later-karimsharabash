@@ -1,8 +1,9 @@
 # Variables
 CC = $(CROSS_COMPILE)gcc
-CFLAGS = -Wall -Werror -g
+CFLAGS = -Wall -Werror -g -pthread
+LDFLAGS = -lrt
 TARGET = aesdsocket
-SRC = aesdsocket.c
+SRC = aesdsocket.c linkedList.c
 OBJ = $(SRC:.c=.o)
 
 # Default target
@@ -10,7 +11,7 @@ all: $(TARGET)
 
 # Build the target application
 $(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 # Compile source files to object files
 %.o: %.c
