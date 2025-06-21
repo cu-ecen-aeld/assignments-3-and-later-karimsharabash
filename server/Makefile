@@ -1,5 +1,5 @@
 # Variables
-CC = $(CROSS_COMPILE)gcc
+CC ?= $(CROSS_COMPILE)gcc
 CFLAGS = -Wall -Werror -g -pthread
 LDFLAGS = -lrt
 TARGET = aesdsocket
