@@ -49,12 +49,12 @@ struct entry {
 	pthread_t thread;
 	SLIST_ENTRY(entry) entries;            
 };
+void cleanup(int sigNo);
 
 
 SLIST_HEAD(ThreadsList, entry) threadQueue;
 
 void *get_in_addr(struct sockaddr *sa);
-void cleanup(int sigNo);
 void *socketHandling (void* data);
 void intervalTimerThread(union sigval sv);
 
@@ -369,7 +369,11 @@ void *socketHandling (void* data)
 		{
 			perror("Openning Log File");
 		}
-		write(fileFd, recvData, dataLen);
+		ret = write(fileFd, recvData, dataLen);
+		if (ret == -1)
+		{
+			perror("write");
+		}
 		pthread_mutex_unlock(&lock);
 		close(fileFd);
 
@@ -402,6 +406,7 @@ void intervalTimerThread(union sigval sv)
     char buffer[100];
 	size_t timeBuffSize = 0;
 	int fileFd;
+	int ret = 0;
     
     // Get the current time
      time_t now;
@@ -425,7 +430,11 @@ void intervalTimerThread(union sigval sv)
 	{
 		perror("Openning Log File");
 	}
-	write(fileFd, buffer, timeBuffSize);
+	ret = write(fileFd, buffer, timeBuffSize);
+	if (ret == -1)
+	{
+		perror("write");
+	}
 	close(fileFd);
 	pthread_mutex_unlock(&lock);
 }
