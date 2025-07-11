@@ -17,30 +17,65 @@
 #include <linux/types.h>
 #include <linux/cdev.h>
 #include <linux/fs.h> // file_operations
+#include <linux/slab.h>
+
 #include "aesdchar.h"
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
 
-MODULE_AUTHOR("Your Name Here"); /** TODO: fill in your name **/
+MODULE_AUTHOR("Karim Sharabash"); /** TODO: fill in your name **/
 MODULE_LICENSE("Dual BSD/GPL");
+
+#define BUFF_BLOCK_SIZE (1024)
 
 struct aesd_dev aesd_device;
 
 int aesd_open(struct inode *inode, struct file *filp)
 {
+    struct aesd_dev *dev;
+
     PDEBUG("open");
     /**
      * TODO: handle open
+     * get the device 
+     * check first time
+     * create file 
+     * protect it
+     * return the buffer if we succeed to do it
      */
+    /* get the Device*/
+    dev = container_of(inode->i_cdev, struct aesd_dev, cdev);
+    filp->private_data = dev;
+
+    // if ( (filp->f_flags & O_ACCMODE) == O_WRONLY) {
+
+    // }
+    if (dev->buffer == NULL )
+    {
+        dev->buffer = kmalloc( BUFF_BLOCK_SIZE, GFP_KERNEL );
+        dev->string_len = 0;
+        dev->buffer_size = BUFF_BLOCK_SIZE;
+    }
+
     return 0;
 }
 
 int aesd_release(struct inode *inode, struct file *filp)
 {
+    struct aesd_dev *dev = filp->private_data;
+
+
     PDEBUG("release");
     /**
      * TODO: handle release
      */
+    if (dev->buffer && (dev->string_len == 0))
+    {
+        kfree(dev->buffer);
+        dev->buffer = NULL;
+    }
+
+
     return 0;
 }
 
@@ -48,10 +83,30 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
                 loff_t *f_pos)
 {
     ssize_t retval = 0;
+    struct aesd_dev *dev = filp->private_data;
+    unsigned long strLen = 0;
+    unsigned long retStatus  =0;
+
+    
     PDEBUG("read %zu bytes with offset %lld",count,*f_pos);
     /**
      * TODO: handle read
      */
+
+    if (dev->string_len > 0)
+    {
+        strLen = strlen(dev->buffer);
+        if (count <= strLen)
+        {
+            strLen = count;
+        }
+        retStatus = copy_to_user(buf, dev->buffer, strLen);
+        if (retStatus !=0)
+        {
+            PDEBUG("copy_to_user failed with rematining bytes= %ld", retStatus);
+        }
+        retval = strLen;
+    }
     return retval;
 }
 
@@ -59,10 +114,41 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
                 loff_t *f_pos)
 {
     ssize_t retval = -ENOMEM;
+    struct aesd_dev *dev = filp->private_data;
+    unsigned long retStatus =0;
     PDEBUG("write %zu bytes with offset %lld",count,*f_pos);
     /**
      * TODO: handle write
+     * 
+     * handle position
      */
+    
+
+
+    if (count + dev->string_len  > dev->buffer_size)
+    {
+        dev->buffer_size = (((count + dev->string_len ) / dev->buffer_size) + 1) * BUFF_BLOCK_SIZE;
+
+        dev->buffer = krealloc( dev->buffer, dev->buffer_size,  GFP_KERNEL);
+    }
+
+    retStatus= copy_from_user(dev->buffer + dev->string_len, buf, count);
+    if (retStatus !=0)
+    {
+        PDEBUG("copy_to_user failed with rematining bytes= %ld", retStatus);
+    }
+
+    // if the buffer ended with \n write to the circular buffer
+    dev->string_len += count;
+    if (dev->buffer[dev->string_len - 1] == '\n')
+    {
+        PDEBUG("the written Buffer is %s", dev->buffer);
+
+        dev->string_len = 0;
+    }
+
+    retval = count;
+     
     return retval;
 }
 struct file_operations aesd_fops = {

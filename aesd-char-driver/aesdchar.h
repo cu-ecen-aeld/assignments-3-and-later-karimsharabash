@@ -27,7 +27,12 @@ struct aesd_dev
 {
     /**
      * TODO: Add structure(s) and locks needed to complete assignment requirements
+     * mutex
+     * buffer
      */
+    unsigned long int  buffer_size;
+    unsigned long int string_len;
+    unsigned char *buffer;
     struct cdev cdev;     /* Char device structure      */
 };
 
