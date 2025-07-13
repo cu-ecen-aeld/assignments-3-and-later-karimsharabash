@@ -95,7 +95,8 @@ void* aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const 
 
     if (buffer->full == 1)
     {
-        bufferToremove = &(buffer->entry[buffer->out_offs]);
+        bufferToremove = (void *)buffer->entry[buffer->out_offs].buffptr;
+        buffer->entry[buffer->out_offs].size = 0;
         buffer->out_offs = NEXT_INDEX(buffer->out_offs);
     }
     else if (buffer->out_offs  == buffer->in_offs )
