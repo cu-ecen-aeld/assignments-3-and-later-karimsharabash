@@ -27,7 +27,7 @@
 #define BACKLOG      			12
 #define MAX_DATA_LEN 			200
 #define MAX_FILE_LEN			4096
-#define SOCKET_DATA_FILE		"/var/tmp/aesdsocketdata"
+#define SOCKET_DATA_FILE		     "/dev/aesdchar"
 
 
 int sockfd;
@@ -276,13 +276,6 @@ void cleanup(int sigNo)
 	closelog(); 
 
 	pthread_mutex_destroy(&lock);
-
-
-	ret = remove(SOCKET_DATA_FILE);
-	if (ret == -1)
-	{
-		perror("remove:");
-	}
 
 	_exit(0);
 
