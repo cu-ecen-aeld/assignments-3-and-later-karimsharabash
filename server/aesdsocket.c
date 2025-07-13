@@ -290,8 +290,10 @@ void cleanup(int sigNo)
 }
 
 char* read_from_file(pthread_mutex_t* mutex) {
-    ssize_t fsize = 0;
+    ssize_t fsize = 1024;
     char* buff = NULL;
+	ssize_t bytes_read = 0;
+	int ret = 0;
 
     pthread_mutex_lock(mutex);
     int read_fd = open(SOCKET_DATA_FILE, O_RDONLY);
@@ -302,13 +304,7 @@ char* read_from_file(pthread_mutex_t* mutex) {
         return NULL;
     }
 
-    struct stat file_stat;
-    fstat(read_fd, &file_stat);
-    fsize = file_stat.st_size + 1;
-    close(read_fd);
     pthread_mutex_unlock(mutex);
-
-    syslog(LOG_USER | LOG_DEBUG, "File Size: %d", (int)fsize);
 
     buff = (char*) malloc(fsize);
     if (buff == NULL) {
@@ -327,15 +323,18 @@ char* read_from_file(pthread_mutex_t* mutex) {
         pthread_mutex_unlock(mutex);
         return NULL;
     }
+	do {
+    	ret = read(read_fd , buff + bytes_read, fsize);
+		if (ret < 0) {
+			syslog(LOG_USER | LOG_ERR, "Error reading from file: %s", strerror(errno));
+			free(buff);
+			close(read_fd);
+			pthread_mutex_unlock(mutex);
+			return NULL;
+		}
 
-    ssize_t bytes_read = read(read_fd, buff, fsize - 1);
-    if (bytes_read < 0) {
-        syslog(LOG_USER | LOG_ERR, "Error reading from file: %s", strerror(errno));
-        free(buff);
-        close(read_fd);
-        pthread_mutex_unlock(mutex);
-        return NULL;
-    }
+		bytes_read += ret;
+	}while (ret > 0);
 
     close(read_fd);
     pthread_mutex_unlock(mutex);
