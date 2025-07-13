@@ -290,7 +290,7 @@ void cleanup(int sigNo)
 }
 
 char* read_from_file(pthread_mutex_t* mutex) {
-    ssize_t fsize = 1024;
+    ssize_t fsize = 2048;
     char* buff = NULL;
 	ssize_t bytes_read = 0;
 	int ret = 0;
@@ -391,6 +391,8 @@ void *socketHandling (void* data)
 	threadsCompleted++;
 
 	close(clientFd);
+
+	free(readData);
 
 	syslog(LOG_INFO, "Closing connection from %s",ipStr);
 
