@@ -20,6 +20,8 @@
 #include <linux/slab.h>
 
 #include "aesdchar.h"
+
+
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
 
@@ -50,12 +52,7 @@ int aesd_open(struct inode *inode, struct file *filp)
     // if ( (filp->f_flags & O_ACCMODE) == O_WRONLY) {
 
     // }
-    if (dev->buffer == NULL )
-    {
-        dev->buffer = kmalloc( BUFF_BLOCK_SIZE, GFP_KERNEL );
-        dev->string_len = 0;
-        dev->buffer_size = BUFF_BLOCK_SIZE;
-    }
+
 
     return 0;
 }
@@ -69,12 +66,13 @@ int aesd_release(struct inode *inode, struct file *filp)
     /**
      * TODO: handle release
      */
+    mutex_lock(&dev->lock);
     if (dev->buffer && (dev->string_len == 0))
     {
         kfree(dev->buffer);
         dev->buffer = NULL;
     }
-
+    mutex_unlock(&dev->lock);
 
     return 0;
 }
@@ -84,29 +82,38 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 {
     ssize_t retval = 0;
     struct aesd_dev *dev = filp->private_data;
-    unsigned long strLen = 0;
+    unsigned long offset = 0;
     unsigned long retStatus  =0;
+    struct aesd_buffer_entry *entry = NULL;
 
     
     PDEBUG("read %zu bytes with offset %lld",count,*f_pos);
-    /**
-     * TODO: handle read
-     */
+  
+    mutex_lock(&dev->lock);
 
-    if (dev->string_len > 0)
+    entry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->circular_buffer, (size_t) (*f_pos), &offset);
+    // entry->buffptr[entry->size] = '\0';
+    
+    if (entry )
     {
-        strLen = strlen(dev->buffer);
-        if (count <= strLen)
-        {
-            strLen = count;
-        }
-        retStatus = copy_to_user(buf, dev->buffer, strLen);
+        PDEBUG("the found buffer  size %ld ", entry->size);
+        PDEBUG("the found buffer is %s with lenght %ld ", entry->buffptr, offset);
+        retStatus = copy_to_user(buf + retval, entry->buffptr + offset, entry->size - offset);
         if (retStatus !=0)
         {
             PDEBUG("copy_to_user failed with rematining bytes= %ld", retStatus);
+            return retStatus;
         }
-        retval = strLen;
+        else
+        {
+            retval = (entry->size - offset);
+        }
+        *f_pos += retval;
     }
+    
+
+    mutex_unlock(&dev->lock);
+
     return retval;
 }
 
@@ -116,17 +123,30 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     ssize_t retval = -ENOMEM;
     struct aesd_dev *dev = filp->private_data;
     unsigned long retStatus =0;
+    void* buffToRemove = NULL;
+    struct aesd_buffer_entry entry;
+
     PDEBUG("write %zu bytes with offset %lld",count,*f_pos);
+
     /**
      * TODO: handle write
      * 
      * handle position
      */
     
+    mutex_lock(&dev->lock);
 
+    if (dev->buffer == NULL )
+    {
+        dev->buffer = kmalloc( BUFF_BLOCK_SIZE, GFP_KERNEL );
+        dev->string_len = 0;
+        dev->buffer_size = BUFF_BLOCK_SIZE;
+    }
 
     if (count + dev->string_len  > dev->buffer_size)
     {
+
+        PDEBUG("buffer needs bigger size");
         dev->buffer_size = (((count + dev->string_len ) / dev->buffer_size) + 1) * BUFF_BLOCK_SIZE;
 
         dev->buffer = krealloc( dev->buffer, dev->buffer_size,  GFP_KERNEL);
@@ -143,10 +163,22 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     if (dev->buffer[dev->string_len - 1] == '\n')
     {
         PDEBUG("the written Buffer is %s", dev->buffer);
+        entry.buffptr = dev->buffer;
+        entry.size= dev->string_len;
 
+        buffToRemove = aesd_circular_buffer_add_entry(&dev->circular_buffer, &entry);
+
+        if (buffToRemove != NULL)
+        {
+            kfree(buffToRemove);
+            buffToRemove = NULL;
+        }
+
+        dev->buffer = NULL;
         dev->string_len = 0;
     }
-
+    mutex_unlock(&dev->lock);
+    
     retval = count;
      
     return retval;
@@ -192,6 +224,9 @@ int aesd_init_module(void)
      * TODO: initialize the AESD specific portion of the device
      */
 
+    mutex_init(&aesd_device.lock);
+    aesd_circular_buffer_init(&aesd_device.circular_buffer);
+
     result = aesd_setup_cdev(&aesd_device);
 
     if( result ) {
@@ -206,6 +241,7 @@ void aesd_cleanup_module(void)
     dev_t devno = MKDEV(aesd_major, aesd_minor);
 
     cdev_del(&aesd_device.cdev);
+
 
     /**
      * TODO: cleanup AESD specific poritions here as necessary

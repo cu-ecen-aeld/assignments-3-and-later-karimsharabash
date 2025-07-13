@@ -10,14 +10,20 @@
 
 #ifdef __KERNEL__
 #include <linux/string.h>
+
+#include <linux/printk.h>
+#include <linux/types.h>
+#include <linux/fs.h> // file_operations
+
 #else
 #include <string.h>
-#include <syslog.h>
 #endif
+
+
 
 #include "aesd-circular-buffer.h"
 
-static uint8_t next(uint8_t current);
+#define NEXT_INDEX(current) (((current) + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
 
 /**
  * @param buffer the buffer to search for corresponding offset.  Any necessary locking must be performed by caller.
@@ -32,6 +38,10 @@ static uint8_t next(uint8_t current);
 struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct aesd_circular_buffer *buffer,
             size_t char_offset, size_t *entry_offset_byte_rtn )
 {
+   int readChars = 0;
+   int index = 0;
+   int rem = 0;
+
     /**
     * TODO: implement per description
     */
@@ -40,17 +50,12 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
     return NULL;
    }
 
-   int max = buffer->in_offs + AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
-   int readChars = 0;
-   int index = 0;
-   int rem = 0;
-   syslog(LOG_USER | LOG_ERR, "find entry , in = %d, out = %d, char_offset= %ld", buffer->in_offs , buffer->out_offs, char_offset );
-   for (int i = buffer->out_offs ; i < max; i++)
+
+   PDEBUG("find entry , in = %d, out = %d, char_offset= %ld", buffer->in_offs , buffer->out_offs, char_offset );
+   for (index = buffer->out_offs ; ; index++)
    {    
-
-        index = i % 10;
-
-        syslog(LOG_USER | LOG_ERR, "index = %d, buffer->entry[index].size = %ld", index, buffer->entry[index].size);
+        index %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+        PDEBUG("index = %d, buffer->entry[index].size = %ld", index, buffer->entry[index].size);
         if ((readChars + buffer->entry[index].size - 1) < char_offset)
         {
             readChars += buffer->entry[index].size;
@@ -59,19 +64,18 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
         {
             rem = char_offset - readChars;
             *entry_offset_byte_rtn = rem;
-            syslog(LOG_USER | LOG_ERR, "rem = %d, string = %s", rem, buffer->entry[index].buffptr);
+            PDEBUG("rem = %d, string = %s", rem, buffer->entry[index].buffptr);      
             return &(buffer->entry[index]);
+        }
+
+        if (( (index + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) == buffer->in_offs )
+        {
+            break;
         }
    }
    
    return NULL;
 }
-
-static uint8_t next(uint8_t current)
-{
-    return ((current + 1 ) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED);
-
-} 
 
 /**
 * Adds entry @param add_entry to @param buffer in the location specified in buffer->in_offs.
@@ -80,28 +84,28 @@ static uint8_t next(uint8_t current)
 * Any necessary locking must be handled by the caller
 * Any memory referenced in @param add_entry must be allocated by and/or must have a lifetime managed by the caller.
 */
-void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
+void* aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
 {
-    /**
-    * TODO: implement per description
-    */
+    void *bufferToremove = NULL;
 
     buffer->entry[buffer->in_offs].buffptr = add_entry->buffptr;
     buffer->entry[buffer->in_offs].size = add_entry->size;
 
-    buffer->in_offs = next(buffer->in_offs);
+    buffer->in_offs = NEXT_INDEX(buffer->in_offs);
 
     if (buffer->full == 1)
     {
-        buffer->out_offs = next(buffer->out_offs);
+        bufferToremove = &(buffer->entry[buffer->out_offs]);
+        buffer->out_offs = NEXT_INDEX(buffer->out_offs);
     }
-    else if (buffer->in_offs == 0)
+    else if (buffer->out_offs  == buffer->in_offs )
     {      
         buffer->full = 1;
         
     }
 
-    syslog(LOG_USER | LOG_ERR, "in = %d, out = %d, full = %d ", buffer->in_offs,buffer->out_offs, buffer->full );
+    PDEBUG("in = %d, out = %d, full = %d ", buffer->in_offs,buffer->out_offs, buffer->full );
+    return bufferToremove;
 }
 
 /**
@@ -111,7 +115,5 @@ void aesd_circular_buffer_init(struct aesd_circular_buffer *buffer)
 {
     memset(buffer,0,sizeof(struct aesd_circular_buffer));
 
-    openlog("aesdcb", LOG_PID | LOG_CONS, LOG_USER);
-
-    syslog(LOG_USER | LOG_ERR, "aesd_circular_buffer_init");
+    PDEBUG("aesd_circular_buffer_init");
 }

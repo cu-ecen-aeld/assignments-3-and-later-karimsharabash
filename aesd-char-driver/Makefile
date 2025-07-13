@@ -1,6 +1,6 @@
 # See example Makefile from scull project
 # Comment/uncomment the following line to disable/enable debugging
-#DEBUG = y
+DEBUG = y
 
 # Add your debugging flag (or not) to CFLAGS
 ifeq ($(DEBUG),y)
@@ -9,12 +9,14 @@ else
   DEBFLAGS = -O2
 endif
 
+EXTRA_CFLAGS += -Wno-error=strict-prototypes
+
 EXTRA_CFLAGS += $(DEBFLAGS)
 
 ifneq ($(KERNELRELEASE),)
 # call from kernel build system
 obj-m	:= aesdchar.o
-aesdchar-y :=  main.o
+aesdchar-y := aesd-circular-buffer.o main.o
 else
 
 KERNELDIR ?= /lib/modules/$(shell uname -r)/build
