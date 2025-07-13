@@ -253,8 +253,6 @@ void cleanup(int sigNo)
 {
 
 	// Node *NodePtr = NULL;
-	int ret = 0;
-
 	timer_delete(timer_id);
 	atomic_store(&running, false);
 
