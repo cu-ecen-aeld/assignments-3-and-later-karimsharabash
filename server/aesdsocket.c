@@ -27,12 +27,15 @@
 #define BACKLOG      			12
 #define MAX_DATA_LEN 			200
 #define MAX_FILE_LEN			4096
-#define SOCKET_DATA_FILE		     "/dev/aesdchar"
-
+#define SOCKET_DATA_FILE		"/dev/aesdchar"
+#define TIMESTAMP_ENABLED		0
 
 int sockfd;
 int threadsCompleted = 0;
+
+#if (TIMESTAMP_ENABLED == 1)
 timer_t timer_id;
+#endif
 
 atomic_bool running = true;
 
@@ -56,7 +59,10 @@ SLIST_HEAD(ThreadsList, entry) threadQueue;
 
 void *get_in_addr(struct sockaddr *sa);
 void *socketHandling (void* data);
+
+#if (TIMESTAMP_ENABLED == 1)
 void intervalTimerThread(union sigval sv);
+#endif 
 
 int main(int argc, char* argv[])
 {
@@ -67,11 +73,12 @@ int main(int argc, char* argv[])
 	int ret;
 	int newClientFd;
 	int isDaemon = 0;
-
+	struct entry *tmpNode;
+#if (TIMESTAMP_ENABLED == 1)
     struct sigevent sev;
     struct itimerspec intervalTimeSpec;
+#endif
 
-	struct entry *tmpNode;
 
 	openlog("aesdsocket", LOG_PID | LOG_CONS, LOG_USER);
 
@@ -152,6 +159,7 @@ int main(int argc, char* argv[])
 		}
 
 
+#if (TIMESTAMP_ENABLED == 1)
 		// Configure the timer to generate signal
 		sev.sigev_notify = SIGEV_THREAD;
 		sev.sigev_notify_function = intervalTimerThread;
@@ -174,7 +182,7 @@ int main(int argc, char* argv[])
 			perror("timer_settime");
 			exit(1);
 		}
-
+#endif
 		SLIST_INIT(&threadQueue);
 
 		// now accept an incoming connection:
@@ -253,7 +261,9 @@ void cleanup(int sigNo)
 {
 
 	// Node *NodePtr = NULL;
+#if (TIMESTAMP_ENABLED == 1)
 	timer_delete(timer_id);
+#endif
 	atomic_store(&running, false);
 
 	syslog(LOG_INFO, "Caught signal, exiting");
@@ -391,6 +401,7 @@ void *socketHandling (void* data)
 }
 
 
+#if (TIMESTAMP_ENABLED == 1)
 void intervalTimerThread(union sigval sv)
 {
 	// Create a buffer to hold the formatted time string
@@ -429,4 +440,4 @@ void intervalTimerThread(union sigval sv)
 	close(fileFd);
 	pthread_mutex_unlock(&lock);
 }
-
+#endif
