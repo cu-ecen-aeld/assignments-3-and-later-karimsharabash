@@ -32,6 +32,7 @@ struct aesd_dev
      unsigned long int  buffer_size;
      unsigned long int string_len;
      unsigned char *buffer;
+     unsigned long int total_size;
      struct cdev cdev;     /* Char device structure      */
 };
 

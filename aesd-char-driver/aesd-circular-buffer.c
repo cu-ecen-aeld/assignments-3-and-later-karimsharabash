@@ -84,11 +84,9 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 * Any necessary locking must be handled by the caller
 * Any memory referenced in @param add_entry must be allocated by and/or must have a lifetime managed by the caller.
 */
-void* aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
+struct aesd_buffer_entry * aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
 {
-    void *bufferToremove = NULL;
-
-    bufferToremove = (void *)buffer->entry[buffer->out_offs].buffptr;
+    struct aesd_buffer_entry  *entryToRemove = &(buffer->entry[buffer->out_offs]);
 
     buffer->entry[buffer->in_offs].buffptr = add_entry->buffptr;
     buffer->entry[buffer->in_offs].size = add_entry->size;
@@ -101,7 +99,7 @@ void* aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const 
     }
     else 
     {      
-        bufferToremove = NULL;
+        entryToRemove = NULL;
         if (buffer->out_offs  == buffer->in_offs )
         {
             buffer->full = 1;
@@ -109,7 +107,33 @@ void* aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const 
     }
 
     PDEBUG("in = %d, out = %d, full = %d ", buffer->in_offs,buffer->out_offs, buffer->full );
-    return bufferToremove;
+    return entryToRemove;
+}
+
+
+struct aesd_buffer_entry *aesd_circular_buffer_find_entry_by_index(struct aesd_circular_buffer *buffer,
+            uint8_t entry_index )
+{
+    uint8_t index =0;
+    uint8_t i = buffer->out_offs;
+
+    if (index >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
+    {
+        return NULL;
+    }
+    while (index < entry_index && i != buffer->in_offs)
+    {
+        index++;
+        i = NEXT_INDEX(i);
+    }
+
+    if (index == entry_index)
+    {
+        return &(buffer->entry[index]);
+    }
+    else{
+        return NULL;
+    }
 }
 
 /**
