@@ -20,6 +20,7 @@
 #include <sys/queue.h>
 #include <stdatomic.h>
 #include <stdbool.h>
+#include "../aesd-char-driver/aesd_ioctl.h"
 // #include "linkedList.h"
 
 
@@ -348,51 +349,74 @@ void *socketHandling (void* data)
 	struct sockaddr *clientAdd = clientData->socketAddr;
 	int dataLen = 0;
 	char recvData[MAX_DATA_LEN];
-	char *readData;
+	char readData[MAX_FILE_LEN];
 	char ipStr[INET6_ADDRSTRLEN];
 	int ret = 0;
 	int fileFd;
+	struct aesd_seekto seekto;
+	int bytes_read =0;
 
 	inet_ntop(clientAdd->sa_family,
 				get_in_addr(clientAdd),
 				ipStr, sizeof(ipStr));
 
 	syslog(LOG_INFO, "Accepted connection from %s",ipStr);
+	pthread_mutex_lock(&lock);
+	fileFd = open(SOCKET_DATA_FILE, O_CREAT | O_APPEND | O_RDWR, 0666);
+	if (fileFd == -1)
+	{
+		perror("Openning Log File");
+		return NULL;
+	}
 
 	// ready to communicate on socket descriptor socketDataFd!
 	while((dataLen = recv(clientFd, recvData, MAX_DATA_LEN, 0)) > 0 && atomic_load(&running)) {
-
-		pthread_mutex_lock(&lock);
-
-		fileFd = open(SOCKET_DATA_FILE, O_CREAT | O_APPEND | O_RDWR, 0666);
-		if (fileFd == -1)
+		if (strcmp(recvData, "AESDCHAR_IOCSEEKTO") == 0 )
 		{
-			perror("Openning Log File");
-		}
-		ret = write(fileFd, recvData, dataLen);
-		if (ret == -1)
-		{
-			perror("write");
-		}
-		pthread_mutex_unlock(&lock);
-		close(fileFd);
+			 if (sscanf(recvData, "%*[^:]:%d,%d", &seekto.write_cmd, &seekto.write_cmd_offset) == 2) {
+				syslog(LOG_INFO, "IOCTL command parsed successfully with %d and %d",seekto.write_cmd, seekto.write_cmd_offset);
 
-		if (recvData[dataLen -1] == '\n')
- 			break;
+				ioctl(fileFd, AESDCHAR_IOCSEEKTO, &seekto);
+			} else {
+				syslog(LOG_ERR,"Error: Could not parse the IOCTL command.\n");
+			}
+		}
+		else
+		{
+			ret = write(fileFd, recvData, dataLen);
+			if (ret == -1)
+			{
+				perror("write");
+			}
+			
+			if (recvData[dataLen -1] == '\n')
+				break;
+		}
+			
  	}
 
-	readData = read_from_file(&lock);
-	if (ret == -1)
-	{
-		perror("failed to read the file");
-	}
-	send(clientFd, readData, strlen(readData), 0);
+	memset(readData, 0, MAX_FILE_LEN);
+	do {
+    	ret = read(fileFd , readData + bytes_read, MAX_FILE_LEN);
+		if (ret < 0) {
+			syslog(LOG_USER | LOG_ERR, "Error reading from file: %s", strerror(errno));
+			close(fileFd);
+			pthread_mutex_unlock(&lock);
+			return NULL;
+		}
+
+		bytes_read += ret;
+	}while (ret > 0);
+
+ 	close(fileFd);
+    pthread_mutex_unlock(&lock);
+
+	send(clientFd, readData, bytes_read, 0);
 
 	threadsCompleted++;
 
 	close(clientFd);
 
-	free(readData);
 
 	syslog(LOG_INFO, "Closing connection from %s",ipStr);
 
