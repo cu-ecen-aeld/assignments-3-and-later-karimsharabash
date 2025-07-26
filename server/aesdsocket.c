@@ -371,7 +371,7 @@ void *socketHandling (void* data)
 
 	// ready to communicate on socket descriptor socketDataFd!
 	while((dataLen = recv(clientFd, recvData, MAX_DATA_LEN, 0)) > 0 && atomic_load(&running)) {
-		if (strcmp(recvData, "AESDCHAR_IOCSEEKTO") == 0 )
+		if (strncmp(recvData, "AESDCHAR_IOCSEEKTO", strlen("AESDCHAR_IOCSEEKTO"))== 0 )
 		{
 			 if (sscanf(recvData, "%*[^:]:%d,%d", &seekto.write_cmd, &seekto.write_cmd_offset) == 2) {
 				syslog(LOG_INFO, "IOCTL command parsed successfully with %d and %d",seekto.write_cmd, seekto.write_cmd_offset);
@@ -380,6 +380,7 @@ void *socketHandling (void* data)
 			} else {
 				syslog(LOG_ERR,"Error: Could not parse the IOCTL command.\n");
 			}
+			break;
 		}
 		else
 		{

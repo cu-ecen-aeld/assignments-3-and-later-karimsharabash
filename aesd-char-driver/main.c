@@ -127,12 +127,6 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     struct aesd_buffer_entry entry;
 
     PDEBUG("write %zu bytes with offset %lld",count,*f_pos);
-
-    /**
-     * TODO: handle write
-     * 
-     * handle position
-     */
     
     mutex_lock(&dev->lock);
 
@@ -215,7 +209,7 @@ static long aesd_asdjust_file_offset(struct file *filp, uint32_t wrtie_cmd, uint
   
     mutex_lock(&dev->lock);
 
-    for (i = 0 ;i < wrtie_cmd; i++)
+    for (i = 0 ;i <= wrtie_cmd; i++)
     {
         entry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->circular_buffer, offset, &char_offset);
         if (entry == NULL)
@@ -231,7 +225,7 @@ static long aesd_asdjust_file_offset(struct file *filp, uint32_t wrtie_cmd, uint
         return -EINVAL;
     }
     mutex_unlock(&dev->lock);
-
+    offset -= entry->size;
     offset += write_cmd_offset;
 
     return offset;
@@ -243,10 +237,12 @@ static long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     uint32_t retval = 0;
     switch (cmd) {
         case AESDCHAR_IOCSEEKTO:
+            // PDEBUG("get char with wrtie_cmd=  %d and write_cmd_offset= %d", wrtie_cmd, write_cmd_offset);
             if (copy_from_user(&seekto, (int*)arg, sizeof(seekto)))
                 return -EFAULT;
 
             retval = aesd_asdjust_file_offset(filp, seekto.write_cmd, seekto.write_cmd_offset);
+            PDEBUG("aesd_ioctl, total offset is %d", retval);
             if (retval > 0)
             {
                 filp->f_pos = retval;
